@@ -1,0 +1,77 @@
+---
+title: "Practical machine learning"
+author: "Ashish Kumar"
+date: "August 23, 2014"
+output: pdf_document
+---
+
+
+```{r}
+
+# List of packages for session
+.packages = c("data.table","caret","ggplot2","knitr","xtable","randomForest","Hmisc","doParallel","foreach")
+
+# Install CRAN packages (if not already installed)
+.inst <- .packages %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+
+# Load packages into session 
+lapply(.packages, require, character.only=TRUE)
+
+# Read train and test data
+training_data <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("#DIV/0!") )
+evaluation_data <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("#DIV/0!") )
+```
+
+
+# data cleansing.
+```{r}
+for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+
+for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))}
+
+nonmissing_data<- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
+reduced_data <- training_data[nonmissing_data]
+train
+
+idx <- createDataPartition(y=reduced_data$classe, p=0.75, list=FALSE )
+train <- reduced_data[idx,]
+test <- reduced_data[-idx,]
+
+```{r}
+registerDoParallel()
+x <- train[-ncol(train)]
+y <- train$classe
+
+rf <- foreach(ntree=rep(200, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree) 
+}
+```
+```{r}
+predictions1 <- predict(rf, newdata=train)
+confusionMatrix(predictions1,train$classe)
+
+
+predictions2 <- predict(rf, newdata=test)
+confusionMatrix(predictions2,test$classe)
+```
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+x <- evaluation_data
+x <- x[feature_set[feature_set!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+setwd("/Users/coursera")
+pml_write_files(answers)
+```
+
