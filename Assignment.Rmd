@@ -1,0 +1,97 @@
+Practical Machine learning Assignment
+---
+title: "Practical Machine learning"
+author: "Ashish Kumar"
+date: "August 23, 2014"
+output: html_document
+---
+```{r,echo=FALSE}
+# List of packages for session
+.packages = c("data.table","caret","ggplot2","knitr","xtable","randomForest","Hmisc","doParallel","foreach")
+
+# Install CRAN packages (if not already installed)
+.inst <- .packages %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+
+# Load packages into session 
+lapply(.packages, require, character.only=TRUE)
+
+options(warn=-1)
+# Read train and test data
+training_data <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("#DIV/0!") )
+evaluation_data <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("#DIV/0!") )
+```
+Data exploration
+================
+```{r,echo=FALSE}
+names(training_data)
+```
+Lets check out the summary of all attributes and also find out the mode/class of the attributes , to ensure if the structure is correct.
+```{r}
+str(training_data)
+summary(training_data)
+```
+Data cleansing
+==============
+Convert the attributes starting from roll_belt to the end ,as numeric attributes. ALso from the summary above , we can see there are a lot of missing values for so many attributes and that needs to be handled.As the training sample is sufficient, we need not go for imputation of missing values , instead we can remove all the records with missing values in any attributes. the reduced dataset has all non-missing values for the attributes.
+```{r,echo=FALSE}
+for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+
+for(i in c(8:ncol(evaluation_data)-1)) {evaluation_data[,i] = as.numeric(as.character(evaluation_data[,i]))}
+
+reducedData <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
+red_data <- training_data[reducedData]
+reducedData
+```
+
+Data Sampling:
+==============
+```{r,echo=FALSE}
+idx <- createDataPartition(y=red_data$classe, p=0.75, list=FALSE )
+training <- red_data[idx,]
+testing <- red_data[-idx,]
+```
+Using parallel processing feature of doparallel package ,we can try to achieve a faster speed of computation . ensemble methods like Random forest can take up time if number of trees is large.
+```{r,echo=FALSE}
+registerDoParallel()
+x <- training[-ncol(training)]
+y <- training$classe
+
+rf <- foreach(ntree=rep(200, 5), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree) 
+}
+```
+
+Accuracy check
+==============
+```{r,echo=FALSE}
+predictions1 <- predict(rf, newdata=training)
+confusionMatrix(predictions1,training$classe)
+
+
+predictions2 <- predict(rf, newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+Reading the accuracy metrics and concluding the results
+--------------------------------
+Random forest provided a good prediction accuracy.
+
+Using the submission code provided by coursera,I compiled the evaluation files and submitted.
+```{r,echo=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+x <- evaluation_data
+x <- x[reducedData[reducedData!='classe']]
+answers <- predict(rf, newdata=x)
+answers
+setwd("/Users/Ashish/Coursera")
+pml_write_files(answers)
+```
